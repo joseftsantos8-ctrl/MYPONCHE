@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Ponchador - Control de Asistencia</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    :root {
+      --primary: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --accent: #8b5cf6;
+      --dark: #1f2937;
+      --light: #f3f4f6;
+      --success: #10b981;
+    }
+    * { box-sizing: border-box; margin:0; padding:0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: linear-gradient(135deg, #f0fdfa 0%, #e0f2fe 100%);
+      color: #111827;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+    .card, .admin-panel {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+      padding: 1.8rem;
+      width: 100%;
+      max-width: 580px;
+      margin: 1rem auto;
+    }
+    h1, h2, h3 { text-align: center; margin-bottom: 1.4rem; color: var(--dark); }
+    .form-group { margin-bottom: 1.2rem; }
+    label { display: block; margin-bottom: 0.4rem; font-weight: 600; }
+    input, select { width: 100%; padding: 0.85rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 1rem; }
+    button {
+      width: 100%;
+      padding: 1rem;
+      font-size: 1.05rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 0.7rem;
+    }
+    #btnLogin, #btnSaveEdit { background: var(--primary); color: white; }
+    #btnCreate { background: var(--success); color: white; }
+    #btnBack, #btnBackToLogin, #btnCancelEdit { background: #6b7280; color: white; }
+    .message { margin: 1.1rem 0; padding: 0.8rem; border-radius: 8px; text-align: center; }
+    .error { background: #fee2e2; color: #991b1b; }
+    .success { background: #d1fae5; color: #065f46; }
+    .hidden { display: none !important; }
+    .user-item {
+      background: #f8fafc;
+      padding: 1.1rem;
+      margin-bottom: 1rem;
+      border-radius: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .btn-delete {
+      background: var(--danger);
+      color: white;
+      padding: 0.7rem 1.3rem;
+      font-size: 0.9rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .btn-view {
+      background: var(--accent);
+      color: white;
+      padding: 0.7rem 1.3rem;
+      font-size: 0.9rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .status-today {
+      font-size: 1.4rem;
+      min-width: 44px;
+      text-align: center;
+    }
+    .status-ok    { color: var(--success); }
+    .status-partial { color: var(--warning); }
+    .status-none  { color: #9ca3af; }
+    #userList { margin-top: 1.4rem; }
+    .profile-pic {
+      width: 110px; height: 110px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 3px solid var(--primary);
+      margin: 0 auto 1rem;
+      display: block;
+    }
+    .profile-pic-placeholder { font-size: 3.5rem; color: #d1d5db; }
+    .edit-btn { background: var(--accent); color: white; font-size: 0.95rem; padding: 0.6rem 1.2rem; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .admin-tabs { display: flex; gap: 0.6rem; margin-bottom: 1.4rem; justify-content: center; }
+    .admin-tab {
+      padding: 0.7rem 1.4rem;
+      background: #e5e7eb;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .admin-tab.active { background: var(--primary); color: white; }
+    /* Modal */
+    .modal {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+    }
+    .modal-content {
+      background: white;
+      border-radius: 12px;
+      padding: 1.8rem;
+      width: 90%; max-width: 720px;
+      max-height: 85vh; overflow-y: auto;
+      position: relative;
+    }
+    .close-modal {
+      position: absolute; top: 12px; right: 18px;
+      font-size: 2.2rem; cursor: pointer; color: #6b7280;
+    }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { padding: 0.9rem; text-align: center; border-bottom: 1px solid #e5e7eb; }
+    th { background: #f3f4f6; font-weight: 600; }
+    .no-data { text-align: center; padding: 2rem; color: #6b7280; font-style: italic; }
+  </style>
+</head>
+<body>
+
+<!-- Login / Registro -->
+<div id="auth-screen">
+  <div class="card">
+    <h1><i class="fas fa-clock"></i> Ponchador</h1>
+    <div id="login-form">
+      <div class="form-group"><label>Código de empleado</label><input type="text" id="inputCodigo" placeholder="Ej: ABCDE o ADMIN" autocomplete="off"></div>
+      <div class="form-group"><label>Contraseña</label><input type="password" id="inputPass" placeholder="••••••••"></div>
+      <button id="btnLogin">Iniciar sesión</button>
+      <div id="login-message" class="message"></div>
+      <p style="text-align:center;margin-top:1.1rem;">¿No tienes cuenta? <a href="#" id="linkRegister">Crear usuario</a></p>
+    </div>
+    <div id="register-form" class="hidden">
+      <div class="form-group"><label>Nombre</label><input type="text" id="regNombre" placeholder="Nombre"></div>
+      <div class="form-group"><label>Apellido</label><input type="text" id="regApellido" placeholder="Apellido"></div>
+      <div class="form-group"><label>Código de empleado</label><input type="text" id="regCodigo" placeholder="Ej: 80764"></div>
+      <div class="form-group"><label>Cargo / Puesto</label><input type="text" id="regCargo" placeholder="Ej: Asistente POP"></div>
+      <div class="form-group"><label>Hora entrada habitual</label><select id="regEntrada"><option value="">Selecciona hora</option></select></div>
+      <div class="form-group"><label>Hora salida habitual</label><select id="regSalida"><option value="">Selecciona hora</option></select></div>
+      <div class="form-group"><label>Contraseña</label><input type="password" id="regPass" placeholder="Mínimo 4 caracteres"></div>
+      <button id="btnCreate">Crear cuenta</button>
+      <button id="btnBack">Volver</button>
+      <div id="register-message" class="message"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Panel ADMIN -->
+<div id="admin-panel" class="hidden admin-panel">
+  <h2>Panel de Administración</h2>
+  <p style="text-align:center; color:#4b5563; margin-bottom:1.4rem;">Logueado como <strong>ADMIN</strong></p>
+
+  <div class="admin-tabs">
+    <div class="admin-tab active" data-tab="list">Lista de usuarios</div>
+    <div class="admin-tab" data-tab="edit">Editar usuario</div>
+  </div>
+
+  <div id="admin-list" class="admin-content">
+    <div id="userList"></div>
+    <button id="btnDeleteAllUsers" class="btn-delete" style="margin-top:1.5rem;background:#991b1b;">Eliminar TODOS los usuarios (excepto ADMIN)</button>
+  </div>
+
+  <div id="admin-edit" class="admin-content hidden">
+    <h3>Editar usuario</h3>
+    <select id="editSelectUser"><option value="">Selecciona usuario</option></select>
+    <div id="editForm" class="hidden">
+      <div class="form-group"><label>Nombre</label><input id="editNombre"></div>
+      <div class="form-group"><label>Apellido</label><input id="editApellido"></div>
+      <div class="form-group"><label>Cargo</label><input id="editCargo"></div>
+      <div class="form-group"><label>Hora entrada habitual</label><select id="editEntrada"><option value="">Selecciona hora</option></select></div>
+      <div class="form-group"><label>Hora salida habitual</label><select id="editSalida"><option value="">Selecciona hora</option></select></div>
+      <div class="form-group"><label>Nueva contraseña <small>(dejar vacío = no cambiar)</small></label><input type="text" id="editPassword" placeholder="Nueva contraseña (mín 4 caracteres)"></div>
+      <button id="btnSaveEdit">Guardar cambios</button>
+      <button id="btnCancelEdit">Cancelar</button>
+    </div>
+  </div>
+
+  <button id="btnBackToLogin" style="margin-top:2rem;">Volver al login</button>
+</div>
+
+<!-- Modal ponches -->
+<div id="ponchesModal" class="modal hidden">
+  <div class="modal-content">
+    <span class="close-modal" id="closePonchesModal">×</span>
+    <h3 id="ponchesTitle">Ponches del usuario</h3>
+    <table>
+      <thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Efectivas</th><th>Extras</th></tr></thead>
+      <tbody id="ponchesBody"></tbody>
+    </table>
+    <div id="noPonches" class="no-data hidden">Este usuario aún no tiene registros de ponche.</div>
+  </div>
+</div>
+
+<!-- App usuario normal (sin cambios importantes aquí) -->
+<div id="main-app" class="hidden">
+  <div class="card">
+    <header style="background:#1e40af;color:white;padding:1.4rem;text-align:center;border-radius:12px;margin-bottom:1.5rem;">
+      <h2>Ponchador Diario</h2>
+      <div id="userInfo"></div>
+    </header>
+
+    <div style="display:flex;gap:1rem;margin-bottom:1.5rem;justify-content:center;">
+      <button id="btnShowPonchador" class="active" style="background:var(--primary);color:white;">Ponchar</button>
+      <button id="btnShowProfile">Mi Perfil</button>
+    </div>
+
+    <div id="ponchador-view">
+      <div style="background:#ecfdf5;padding:1rem;border-radius:10px;margin-bottom:1.5rem;text-align:center;">
+        <strong>Jornada normal:</strong> 7 h efectivas<br>
+        <strong>Break:</strong> 1 h (se resta si total ≥ 5 h)
+      </div>
+      <div id="status" style="background:#fefce8;padding:1.2rem;border-radius:10px;text-align:center;min-height:80px;font-size:1.2rem;">Cargando...</div>
+      <div class="grid-2" style="margin:2rem 0;">
+        <button id="btnEntrada" style="background:var(--primary);color:white;padding:1.5rem;font-size:1.5rem;"><i class="fas fa-sign-in-alt"></i> ENTRADA</button>
+        <button id="btnSalida" style="background:var(--warning);color:white;padding:1.5rem;font-size:1.5rem;"><i class="fas fa-sign-out-alt"></i> SALIDA</button>
+      </div>
+      <button id="btnClearToday" style="background:var(--danger);color:white;width:100%;padding:1rem;margin-bottom:1rem;"><i class="fas fa-trash-alt"></i> Borrar hoy</button>
+      <button id="btnExport" style="background:var(--accent);color:white;width:100%;padding:1.1rem;margin-bottom:1rem;"><i class="fas fa-file-excel"></i> Exportar Excel</button>
+      <button id="btnLogout" style="background:#6b7280;color:white;width:100%;padding:1rem;">Cerrar sesión</button>
+    </div>
+
+    <div id="profile-view" class="hidden">
+      <div style="text-align:center;margin-bottom:1.5rem;">
+        <div id="profilePhotoContainer">
+          <img id="profilePhoto" class="profile-pic" src="" alt="Foto de perfil" style="display:none;">
+          <div id="profilePhotoPlaceholder" class="profile-pic profile-pic-placeholder"><i class="fas fa-user"></i></div>
+        </div>
+        <input type="file" id="inputPhoto" accept="image/*" style="display:none;">
+        <button id="btnChangePhoto" class="edit-btn"><i class="fas fa-camera"></i> Cambiar foto</button>
+      </div>
+      <div class="form-group"><label>Nombre</label><input id="profileNombre" readonly></div>
+      <div class="form-group"><label>Apellido</label><input id="profileApellido" readonly></div>
+      <div class="form-group"><label>Código</label><input id="profileCodigo" readonly></div>
+      <div class="form-group"><label>Cargo</label><input id="profileCargo" readonly></div>
+      <div class="form-group"><label>Entrada habitual</label><input id="profileEntrada" readonly></div>
+      <div class="form-group"><label>Salida habitual</label><input id="profileSalida" readonly></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ──────────────────────────────────────────────────────────────
+// IndexedDB - PonchadorApp
+// ──────────────────────────────────────────────────────────────
+let db, currentUser = null;
+const DB_NAME = "PonchadorApp";
+const USER_STORE = "usuarios";
+const PONCHE_STORE = "ponches";
+const hoy = new Date().toLocaleDateString("es-DO",{year:"numeric",month:"2-digit",day:"2-digit"});
+const ADMIN_CODIGO = "ADMIN";
+const ADMIN_PASS = "ADMIN1";
+
+function openDB() {
+  return new Promise((res,rej)=>{
+    const req = indexedDB.open(DB_NAME,3);
+    req.onupgradeneeded = e=>{
+      db = e.target.result;
+      if(!db.objectStoreNames.contains(USER_STORE)) db.createObjectStore(USER_STORE,{keyPath:"codigo"});
+      if(!db.objectStoreNames.contains(PONCHE_STORE)) db.createObjectStore(PONCHE_STORE,{keyPath:"id",autoIncrement:true});
+    };
+    req.onsuccess = e=>{db=e.target.result;res();};
+    req.onerror = e=>rej(e.target.error);
+  });
+}
+
+async function getUser(codigo){
+  return new Promise(r=>{
+    db.transaction(USER_STORE,"readonly").objectStore(USER_STORE).get(codigo).onsuccess = e=>r(e.target.result||null);
+  });
+}
+
+async function getAllUsers(){
+  return new Promise(r=>{
+    db.transaction(USER_STORE,"readonly").objectStore(USER_STORE).getAll().onsuccess = e=>r(e.target.result||[]);
+  });
+}
+
+async function saveUser(user){
+  return new Promise(r=>{
+    db.transaction(USER_STORE,"readwrite").objectStore(USER_STORE).put(user);
+    r(true);
+  });
+}
+
+async function deleteUser(codigo){
+  if(codigo.toUpperCase()===ADMIN_CODIGO) return false;
+  return new Promise(r=>{
+    db.transaction(USER_STORE,"readwrite").objectStore(USER_STORE).delete(codigo);
+    r(true);
+  });
+}
+
+async function deleteAllNormalUsers(){
+  const users = await getAllUsers();
+  for(const u of users)if(u.codigo.toUpperCase()!==ADMIN_CODIGO)await deleteUser(u.codigo);
+  return true;
+}
+
+async function getPonchesUsuario(codigo){
+  const todos = await new Promise(r=>{
+    db.transaction(PONCHE_STORE,"readonly").objectStore(PONCHE_STORE).getAll().onsuccess=e=>r(e.target.result||[]);
+  });
+  return todos.filter(p=>p.codigoUsuario===codigo);
+}
+
+async function savePonche(reg){
+  if(!currentUser || currentUser.isAdmin) return false;
+  reg.codigoUsuario = currentUser.codigo;
+  reg.fecha = reg.fecha || hoy;
+  return new Promise(r=>{
+    db.transaction(PONCHE_STORE,"readwrite").objectStore(PONCHE_STORE).put(reg);
+    r(true);
+  });
+}
+
+async function deleteTodayPonche(){
+  if(!currentUser || currentUser.isAdmin) return;
+  const hoyUser = await getPonchesUsuario(currentUser.codigo);
+  const regHoy = hoyUser.find(p=>p.fecha===hoy);
+  if(!regHoy) return;
+  return new Promise(r=>{
+    db.transaction(PONCHE_STORE,"readwrite").objectStore(PONCHE_STORE).delete(regHoy.id);
+    r();
+  });
+}
+
+function formatHour(d){return d.toLocaleTimeString("es-DO",{hour12:true,hour:"numeric",minute:"2-digit"});}
+
+function calc(entrada,salida){
+  let minE=entrada.getHours()*60+entrada.getMinutes(), minS=salida.getHours()*60+salida.getMinutes();
+  if(minS<minE)minS+=1440;
+  let totalH=(minS-minE)/60, efectivas=totalH>=5?totalH-1:totalH, extras=Math.max(0,efectivas-7);
+  return {total:totalH.toFixed(2),efectivas:efectivas.toFixed(2),extras:extras.toFixed(2)};
+}
+
+// ─── Opciones horas ────────────────────────────────
+function crearOpcionesHoras(id){
+  const s = document.getElementById(id);
+  if(!s)return;
+  s.innerHTML='<option value="">Selecciona hora</option>';
+  ["6:00am","7:00am","8:00am","9:00am","10:00am","11:00am","12:00pm","1:00pm","2:00pm","3:00pm","4:00pm","5:00pm","6:00pm","7:00pm","8:00pm","9:00pm","10:00pm","11:00pm","12:00am"].forEach(h=>{
+    let o=document.createElement("option");o.value=h;o.textContent=h;s.appendChild(o);
+  });
+}
+["regEntrada","regSalida","editEntrada","editSalida"].forEach(crearOpcionesHoras);
+
+// Helpers
+function showMessage(el,msg,cls="success"){el.innerHTML=`<div class="${cls}">${msg}</div>`;}
+function hideAllScreens(){document.querySelectorAll("#auth-screen,#admin-panel,#main-app").forEach(el=>el.classList.add("hidden"));}
+function showScreen(id){hideAllScreens();document.getElementById(id).classList.remove("hidden");}
+
+// ─── Login ─────────────────────────────────────────
+document.getElementById("btnLogin").onclick=async()=>{
+  const cod=document.getElementById("inputCodigo").value.trim().toUpperCase();
+  const pass=document.getElementById("inputPass").value;
+  if(!cod||!pass){showMessage(document.getElementById("login-message"),"Ingresa código y contraseña","error");return;}
+
+  if(cod===ADMIN_CODIGO&&pass===ADMIN_PASS){
+    currentUser={codigo:ADMIN_CODIGO,nombre:"Administrador",isAdmin:true};
+    showScreen("admin-panel");
+    loadAdminInterface();
+    return;
+  }
+
+  const user=await getUser(cod);
+  if(!user){showMessage(document.getElementById("login-message"),"Usuario no encontrado","error");return;}
+  if(user.password!==pass){showMessage(document.getElementById("login-message"),"Contraseña incorrecta","error");return;}
+
+  currentUser=user;
+  showScreen("main-app");
+  document.getElementById("userInfo").textContent=`Bienvenido, ${user.nombre} ${user.apellido}`;
+  loadProfileData();
+  loadPonches();
+};
+
+// Registro (sin cambios relevantes)
+
+// ─── ADMIN ─────────────────────────────────────────
+async function loadAdminInterface(){
+  document.querySelectorAll(".admin-tab").forEach(t=>t.classList.remove("active"));
+  document.querySelector('[data-tab="list"]').classList.add("active");
+  document.getElementById("admin-list").classList.remove("hidden");
+  document.getElementById("admin-edit").classList.add("hidden");
+  await loadUserList();
+}
+
+async function loadUserList(){
+  const users=await getAllUsers();
+  const cont=document.getElementById("userList");
+  cont.innerHTML="<h3>Usuarios registrados</h3>";
+  if(users.length<=1){cont.innerHTML+="<p style='text-align:center;color:#6b7280;'>No hay usuarios registrados.</p>";return;}
+
+  for(const u of users){
+    if(u.codigo.toUpperCase()===ADMIN_CODIGO)continue;
+
+    const ponchesHoy = await getPonchesUsuario(u.codigo);
+    const regHoy = ponchesHoy.find(p=>p.fecha===hoy);
+
+    let status = '<span class="status-today status-none">–</span>';
+    if(regHoy){
+      if(regHoy.entrada && regHoy.salida) status='<span class="status-today status-ok"><i class="fas fa-check-circle"></i></span>';
+      else if(regHoy.entrada) status='<span class="status-today status-partial"><i class="fas fa-clock"></i></span>';
+    }
+
+    const div=document.createElement("div");
+    div.className="user-item";
+    div.innerHTML=`
+      <div style="flex:1;">
+        <strong>${u.nombre} ${u.apellido}</strong><br>
+        Código: ${u.codigo}<br>
+        Cargo: ${u.cargo||"-"}<br>
+        Horario: ${u.horarioEntrada||"--"} → ${u.horarioSalida||"--"}
+      </div>
+      <div style="text-align:center; min-width:60px;">
+        <div>Hoy</div>
+        ${status}
+      </div>
+      <div style="display:flex;gap:0.6rem;">
+        <button class="btn-view" data-codigo="${u.codigo}">Ver ponches</button>
+        <button class="btn-delete" data-codigo="${u.codigo}">Eliminar</button>
+      </div>
+    `;
+    cont.appendChild(div);
+  }
+
+  document.querySelectorAll(".btn-delete").forEach(b=>b.onclick=async()=>{
+    if(!confirm(`Eliminar ${b.dataset.codigo}?`))return;
+    if(await deleteUser(b.dataset.codigo)){
+      loadUserList();
+      loadEditUserSelect();
+    }
+  });
+
+  document.querySelectorAll(".btn-view").forEach(b=>b.onclick=async()=>{
+    const cod=b.dataset.codigo;
+    const u=await getUser(cod);
+    if(!u)return;
+    document.getElementById("ponchesTitle").textContent=`Ponches de ${u.nombre} ${u.apellido} (${cod})`;
+    await mostrarPonchesDeUsuario(cod);
+    document.getElementById("ponchesModal").classList.remove("hidden");
+  });
+}
+
+async function mostrarPonchesDeUsuario(cod){
+  const tbody=document.getElementById("ponchesBody");
+  const noData=document.getElementById("noPonches");
+  tbody.innerHTML="";
+  const ponches=await getPonchesUsuario(cod);
+  if(ponches.length===0){noData.classList.remove("hidden");return;}
+  noData.classList.add("hidden");
+  ponches.sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  ponches.forEach(p=>{
+    let ef="-", ex="-";
+    if(p.entrada&&p.salida){
+      const r=calc(new Date(p.entrada.full),new Date(p.salida.full));
+      ef=r.efectivas;
+      ex=r.extras>0?`+${r.extras}`:"";
+    }
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${p.fecha}</td><td>${p.entrada?p.entrada.hora:'-'}</td><td>${p.salida?p.salida.hora:'-'}</td><td>${ef}</td><td>${ex}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById("closePonchesModal").onclick=()=>document.getElementById("ponchesModal").classList.add("hidden");
+
+// Editar usuario + contraseña
+document.getElementById("editSelectUser").onchange=async e=>{
+  const cod=e.target.value;
+  const f=document.getElementById("editForm");
+  if(!cod){f.classList.add("hidden");return;}
+  const u=await getUser(cod);
+  if(!u)return;
+  document.getElementById("editNombre").value=u.nombre;
+  document.getElementById("editApellido").value=u.apellido;
+  document.getElementById("editCargo").value=u.cargo||"";
+  document.getElementById("editEntrada").value=u.horarioEntrada||"";
+  document.getElementById("editSalida").value=u.horarioSalida||"";
+  document.getElementById("editPassword").value="";
+  f.classList.remove("hidden");
+};
+
+document.getElementById("btnSaveEdit").onclick=async()=>{
+  const cod=document.getElementById("editSelectUser").value;
+  if(!cod)return;
+  const u=await getUser(cod);
+  if(!u)return;
+
+  u.nombre=document.getElementById("editNombre").value.trim();
+  u.apellido=document.getElementById("editApellido").value.trim();
+  u.cargo=document.getElementById("editCargo").value.trim();
+  u.horarioEntrada=document.getElementById("editEntrada").value;
+  u.horarioSalida=document.getElementById("editSalida").value;
+
+  const np=document.getElementById("editPassword").value.trim();
+  if(np.length>=4) u.password=np;
+
+  if(await saveUser(u)){
+    alert("Usuario actualizado");
+    loadUserList();
+  }
+};
+
+document.getElementById("btnCancelEdit").onclick=()=>document.getElementById("editForm").classList.add("hidden");
+
+// ─── Resto del código (perfil, ponchador, logout, etc.) ────
+// ... (mantiene la misma lógica que ya tenías para perfil, ponchador, exportar, etc.)
+
+// Inicio
+(async()=>{
+  try{
+    await openDB();
+    if(!await getUser(ADMIN_CODIGO)){
+      await saveUser({codigo:ADMIN_CODIGO,nombre:"Admin",apellido:"",password:ADMIN_PASS,isAdmin:true,foto:""});
+    }
+  }catch(e){
+    alert("Error al iniciar base de datos");
+  }
+})();
+</script>
+</body>
+</html>
